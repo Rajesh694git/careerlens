@@ -1,9 +1,14 @@
 
+import logging
+import time
+
 import httpx
 from pydantic import BaseModel
 
 from app.schemas.analysis import AnalysisResponse
 
+
+logger = logging.getLogger(__name__)
 
 OLLAMA_URL = "http://localhost:11434/api/chat"
 MODEL_NAME = "qwen3.5:4b"
@@ -31,35 +36,63 @@ async def generate_structured(
         },
     }
 
-    async with httpx.AsyncClient(timeout=240.0) as client:
-        response = await client.post(
-            OLLAMA_URL,
-            json=payload,
+    start_time = time.perf_counter()
+
+    try:
+        async with httpx.AsyncClient(timeout=240.0) as client:
+            response = await client.post(
+                OLLAMA_URL,
+                json=payload,
+            )
+            response.raise_for_status()
+
+    except httpx.HTTPError as exc:
+        logger.error(
+            "Ollama request failed: model=%s error_type=%s",
+            MODEL_NAME,
+            type(exc).__name__,
         )
-        response.raise_for_status()
+        raise
 
     result = response.json()
-    print("Ollama done reason:", result.get("done_reason"))
-    print("Ollama generated tokens:", result.get("eval_count"))
-    print("Ollama message:", result.get("message"))
     message = result.get("message") or {}
     content = (message.get("content") or "").strip()
 
+    duration_seconds = time.perf_counter() - start_time
+
+    logger.info(
+        "Ollama generation completed: model=%s duration_seconds=%.2f "
+        "done_reason=%s prompt_tokens=%s generated_tokens=%s",
+        MODEL_NAME,
+        duration_seconds,
+        result.get("done_reason"),
+        result.get("prompt_eval_count"),
+        result.get("eval_count"),
+    )
+
     if not content:
-        raise RuntimeError(
-            "Ollama returned empty content. "
-            f"Done reason: {result.get('done_reason')}, "
-            f"Generated tokens: {result.get('eval_count')}, "
-            f"Thinking tokens: "
-            f"{len(message.get('thinking') or '')}"
+        logger.warning(
+            "Ollama returned empty content: model=%s done_reason=%s "
+            "generated_tokens=%s thinking_tokens=%s",
+            MODEL_NAME,
+            result.get("done_reason"),
+            result.get("eval_count"),
+            len(message.get("thinking") or ""),
         )
+        raise RuntimeError("Ollama returned empty content.")
 
     try:
         return response_schema.model_validate_json(content)
+
     except Exception as exc:
+        logger.warning(
+            "Ollama response validation failed: model=%s error_type=%s",
+            MODEL_NAME,
+            type(exc).__name__,
+        )
         raise ValueError(
-            f"Invalid structured response from Ollama: {exc}",
-        ) from exc
+            "Ollama returned a response that does not match the expected schema."
+        ) from None
 
 
 async def analyse_resume(
