@@ -1,9 +1,8 @@
-
 import logging
 import time
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.schemas.analysis import AnalysisResponse
 
@@ -84,7 +83,7 @@ async def generate_structured(
     try:
         return response_schema.model_validate_json(content)
 
-    except Exception as exc:
+    except ValidationError as exc:
         logger.warning(
             "Ollama response validation failed: model=%s error_type=%s",
             MODEL_NAME,
