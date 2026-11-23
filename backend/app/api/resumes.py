@@ -1,7 +1,7 @@
-
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from starlette.concurrency import run_in_threadpool
 
+from app.constants import MAX_RESUME_FILE_SIZE_BYTES
 from app.schemas.candidate import CandidateProfile
 from app.services.candidate_service import extract_candidate_profile
 from app.services.document_parser import extract_resume_text
@@ -16,8 +16,6 @@ router = APIRouter(
 async def extract_resume(
     resume: UploadFile = File(...),
 ):
-    max_file_size = 5 * 1024 * 1024
-
     try:
         if not resume.filename:
             raise HTTPException(
@@ -25,9 +23,9 @@ async def extract_resume(
                 detail="Resume filename is missing.",
             )
 
-        content = await resume.read(max_file_size + 1)
+        content = await resume.read(MAX_RESUME_FILE_SIZE_BYTES + 1)
 
-        if len(content) > max_file_size:
+        if len(content) > MAX_RESUME_FILE_SIZE_BYTES:
             raise HTTPException(
                 status_code=413,
                 detail="Resume exceeds the 5 MB limit.",
