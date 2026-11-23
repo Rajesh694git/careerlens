@@ -3,13 +3,13 @@ from starlette.concurrency import run_in_threadpool
 
 import httpx
 
+from app.constants import MAX_RESUME_FILE_SIZE_BYTES
 from app.schemas.analysis import AnalysisRequest, AnalysisResponse
 from app.services.document_parser import extract_resume_text
 from app.services.llm_service import analyse_resume
 
 router = APIRouter(prefix="/api/v1", tags=["Analysis"])
 
-MAX_FILE_SIZE = 5 * 1024 * 1024
 MAX_JD_LENGTH = 20000
 
 
@@ -52,9 +52,9 @@ async def analyze_upload(
         raise HTTPException(413, "Job description is too large.")
 
     try:
-        content = await resume.read(MAX_FILE_SIZE + 1)
+        content = await resume.read(MAX_RESUME_FILE_SIZE_BYTES + 1)
 
-        if len(content) > MAX_FILE_SIZE:
+        if len(content) > MAX_RESUME_FILE_SIZE_BYTES:
             raise HTTPException(413, "Maximum resume size is 5 MB.")
 
         resume_text = await run_in_threadpool(
@@ -87,4 +87,3 @@ async def analyze_upload(
 
     finally:
         await resume.close()
-
