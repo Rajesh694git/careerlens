@@ -8,33 +8,35 @@ from app.services.document_parser import extract_resume_text
 
 router = APIRouter(
     prefix="/api/v1/resumes",
-    tags=["Resume Analysis"]
+    tags=["Resume Analysis"],
 )
 
 
 @router.post("/extract", response_model=CandidateProfile)
 async def extract_resume(
-    resume: UploadFile = File(...)
+    resume: UploadFile = File(...),
 ):
+    max_file_size = 5 * 1024 * 1024
+
     try:
         if not resume.filename:
             raise HTTPException(
                 status_code=400,
-                detail="Resume filename is missing."
+                detail="Resume filename is missing.",
             )
 
-        content = await resume.read()
+        content = await resume.read(max_file_size + 1)
 
-        if len(content) > 5 * 1024 * 1024:
+        if len(content) > max_file_size:
             raise HTTPException(
                 status_code=413,
-                detail="Resume exceeds the 5 MB limit."
+                detail="Resume exceeds the 5 MB limit.",
             )
 
         resume_text = await run_in_threadpool(
             extract_resume_text,
             resume.filename,
-            content
+            content,
         )
 
         return await extract_candidate_profile(resume_text)
@@ -42,13 +44,13 @@ async def extract_resume(
     except ValueError as exc:
         raise HTTPException(
             status_code=422,
-            detail=str(exc)
+            detail=str(exc),
         ) from exc
 
     except RuntimeError as exc:
         raise HTTPException(
             status_code=502,
-            detail=str(exc)
+            detail=str(exc),
         ) from exc
 
     finally:
